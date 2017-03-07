@@ -75,6 +75,7 @@ private slots:
     void decodedChukReceived(double chuk_value);
     void updateThrottleCurve(bool clicked);
     void updateThrottleCurve(double max_watts);
+    bool checkIfVescIsConnected();
 
     void on_serialConnectButton_clicked();
     void on_udpConnectButton_clicked();
@@ -132,6 +133,8 @@ private slots:
     void on_mcconfFocMeasureHallButton_clicked();
     void on_mcconfFocMeasureHallApplyButton_clicked();
     void on_refreshButton_clicked();
+    void on_ppmSignalAutoWizard_clicked(); //changed
+    ppm_control_type getPPMType();
 
 private:
     Ui::MainWindow *ui;
@@ -198,6 +201,11 @@ private:
     void clearBuffers();
     void saveExperimentSamplesToFile(QString path);
     void refreshSerialDevices();
+
+    double max_ppm_last_len;
+    double min_ppm_last_len;
+    double actual_ppm_last_len;
+
 };
 
 #endif // MAINWINDOW_H

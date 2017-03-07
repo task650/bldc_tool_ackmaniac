@@ -56,7 +56,7 @@ MainWindow::MainWindow(QWidget *parent) :
     // Compatible firmwares
     mFwVersionReceived = false;
     mFwRetries = 0;
-    mCompatibleFws.append(qMakePair(2, 52));
+    mCompatibleFws.append(qMakePair(2, 53));
     //mCompatibleFws.append(qMakePair(2, 18));
 
     QString supportedFWs;
@@ -2190,6 +2190,14 @@ void MainWindow::decodedPpmReceived(double ppm_value, double ppm_last_len)
 {
     ui->appconfDecodedPpmBar->setValue((ppm_value + 1.0) * 500.0);
     ui->appconfPpmPulsewidthNumber->display(ppm_last_len);
+
+    if (ppm_last_len > max_ppm_last_len){
+        max_ppm_last_len = ppm_last_len;
+    }
+    if (ppm_last_len < min_ppm_last_len){
+        min_ppm_last_len = ppm_last_len;
+    }
+    actual_ppm_last_len = ppm_last_len;
 }
 
 void MainWindow::decodedAdcReceived(double adc_value, double adc_voltage, double adc_value2, double adc_voltage2)
@@ -2814,9 +2822,20 @@ void MainWindow::on_mcconfSaveXmlButton_clicked()
 
 void MainWindow::on_mcconfDetectMotorParamButton_clicked()
 {
-    mPacketInterface->detectMotorParam(ui->mcconfDetectCurrentBox->value(),
-                                       ui->mcconfDetectErpmBox->value(),
-                                       ui->mcconfDetectLowDutyBox->value());
+    if (checkIfVescIsConnected()){
+
+        QMessageBox msgBox;
+        msgBox.setWindowTitle("BLDC Motor detection");
+        msgBox.setText("Do you really want to start the motor detection for BLDC mode?\n\nIf you want to continue then you should be sure that you disabled the remote application in BLDC-Tool. Otherwise it can interfear with the detection.\n\nAfter the detection was successful you have to press the (Apply) Button and then the (Write configuration) Button to store the detected values.\n\nIf you have 2 Motors you have to do this also for the other Motor.");
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.addButton(QMessageBox::Cancel);
+        msgBox.setDefaultButton(QMessageBox::Cancel);
+        if(msgBox.exec() == QMessageBox::Ok){
+            mPacketInterface->detectMotorParam(ui->mcconfDetectCurrentBox->value(),
+                                               ui->mcconfDetectErpmBox->value(),
+                                               ui->mcconfDetectLowDutyBox->value());
+        }
+    }
 }
 
 void MainWindow::on_appconfReadButton_clicked()
@@ -3129,15 +3148,27 @@ void MainWindow::on_mcconfFocObserverGainCalcButton_clicked()
 
 void MainWindow::on_mcconfFocMeasureRLButton_clicked()
 {
-    mPacketInterface->measureRL();
+    if(checkIfVescIsConnected()){
+        QMessageBox msgBox;
+        msgBox.setWindowTitle("FOC Motor detection");
+        msgBox.setText("Do you really want to start the motor detection for FOC mode?\n\nIf you want to continue then you should be sure that you disabled the remote application in BLDC-Tool. Otherwise it can interfear with the detection.\n\nAfter the detection was successful you have to press the (Measure λ (Req: R)) Button to start the flux linkage detection.\nAfter that detection finished successfully you have to press the (Calc CC (Req: R and L)) Button and then the 2 (Apply) Buttons.\nAfterwards press the (Write configuration) Button to store the detected values.\n\nIf you have 2 Motors you have to do this also for the other Motor.");
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.addButton(QMessageBox::Cancel);
+        msgBox.setDefaultButton(QMessageBox::Cancel);
+        if(msgBox.exec() == QMessageBox::Ok){
+            mPacketInterface->measureRL();
+        }
+    }
 }
 
 void MainWindow::on_mcconfFocMeasureLinkageButton_clicked()
 {
-    mPacketInterface->measureLinkage(ui->mcconfFocDetectCurrentBox->value(),
-                                     ui->mcconfFocDetectMinRpmBox->value(),
-                                     ui->mcconfFocDetectDutyBox->value(),
-                                     ui->mcconfFocDetectRBox->value());
+    if(checkIfVescIsConnected()){
+        mPacketInterface->measureLinkage(ui->mcconfFocDetectCurrentBox->value(),
+                                         ui->mcconfFocDetectMinRpmBox->value(),
+                                         ui->mcconfFocDetectDutyBox->value(),
+                                         ui->mcconfFocDetectRBox->value());
+    }
 }
 
 void MainWindow::on_mcconfFocCalcCCButton_clicked()
@@ -3276,7 +3307,9 @@ void MainWindow::on_detectObserverButton_clicked()
 
 void MainWindow::on_mcconfFocMeasureHallButton_clicked()
 {
-    mPacketInterface->measureHallFoc(ui->mcconfFocMeasureHallCurrentBox->value());
+    if(checkIfVescIsConnected()){
+        mPacketInterface->measureHallFoc(ui->mcconfFocMeasureHallCurrentBox->value());
+    }
 }
 
 void MainWindow::on_mcconfFocMeasureHallApplyButton_clicked()
@@ -3294,4 +3327,72 @@ void MainWindow::on_mcconfFocMeasureHallApplyButton_clicked()
 void MainWindow::on_refreshButton_clicked()
 {
     refreshSerialDevices();
+}
+
+void MainWindow::on_ppmSignalAutoWizard_clicked()
+{
+    if (checkIfVescIsConnected()){
+
+        ui->appconfUpdatePpmBox->setChecked(true);
+
+        max_ppm_last_len = -1.0;
+        min_ppm_last_len = 100.0;
+        QMessageBox msgBox;
+        msgBox.setWindowTitle("BLDC automatic Motor detection");
+        msgBox.setText("Please move the throttle all the way up and down a couple of times and then leave it at the center position and don't touch it and press Ok.");
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.addButton(QMessageBox::Cancel);
+        msgBox.setDefaultButton(QMessageBox::Cancel);
+        if(msgBox.exec() == QMessageBox::Ok){
+            if(min_ppm_last_len < actual_ppm_last_len - 0.2 && max_ppm_last_len > actual_ppm_last_len + 0.2){
+                ui->appconfPpmPulseStartBox->setValue((((int)(min_ppm_last_len * 100)) + 2) / 100.0);
+                ui->appconfPpmPulseCenterBox->setValue(actual_ppm_last_len);
+                ui->appconfPpmPulseWidthBox->setValue((((int)(max_ppm_last_len * 100)) - 2) / 100.0);
+                QMessageBox msgBox2;
+                msgBox2.warning(this, "Warning", "The detection was successful. To store the values please don't forget to save the configuration.");
+
+
+            } else {
+                QMessageBox msgBox2;
+                msgBox2.warning(this, "Warning", "WARNING: The detection went wrong, please repeat it.");
+            }
+        }
+    }
+}
+
+bool MainWindow::checkIfVescIsConnected(){
+    if (mSerialPort->isOpen() || mPacketInterface->isUdpConnected()){
+        return true;
+    } else{
+        showStatusInfo("VESC is not connected", false);
+        QMessageBox messageBox;
+        messageBox.warning(this, "Warning", "The VESC is not connected. Please connect the VESC via USB to your computer and start the program again or press the connect button on the top right of this screen.");
+        return false;
+    }
+}
+
+ppm_control_type MainWindow::getPPMType(){
+    if (ui->appconfPpmDisabledButton->isChecked()) {
+        return PPM_CTRL_TYPE_NONE;
+    } else if (ui->appconfPpmCurrentButton->isChecked()) {
+        return PPM_CTRL_TYPE_CURRENT;
+    //} else if (ui->appconfPpmCurrentNorevButton->isChecked()) {
+    //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT_NOREV;
+    } else if (ui->appconfPpmCurrentNorevBrakeButton->isChecked()) {
+        return PPM_CTRL_TYPE_CURRENT_NOREV_BRAKE;
+    //} else if (ui->appconfPpmDutyButton->isChecked()) {
+    //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_DUTY;
+    //} else if (ui->appconfPpmDutyNorevButton->isChecked()) {
+    //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_DUTY_NOREV;
+    //} else if (ui->appconfPpmPidButton->isChecked()) {
+    //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID;
+    //} else if (ui->appconfPpmPidNorevButton->isChecked()) {
+    //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID_NOREV;
+    } else if (ui->appconfPpmWattNorevBrakeButton->isChecked()) {
+        return PPM_CTRL_TYPE_WATT_NOREV_BRAKE;
+    //} else if (ui->appconfPpmPIDNoAccelerationButton->isChecked()) {
+    //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID_NOACCELERATION;
+    } else if (ui->appconfPpmCruiseControlSecondaryChannel->isChecked()) {
+        return PPM_CTRL_TYPE_CRUISE_CONTROL_SECONDARY_CHANNEL;
+    }
 }

@@ -1143,6 +1143,32 @@ bool PacketInterface::setAppConf(const app_configuration &appconf)
     return sendPacket(mSendBuffer, send_index);
 }
 
+bool PacketInterface::setSpeedMode(ppm_control_type ppm_type)
+{
+    qint32 send_index = 0;
+
+    mSendBuffer[send_index++] = COMM_SET_SPEED_MODE;
+    mSendBuffer[send_index++] = 1; // speed mode
+    mSendBuffer[send_index++] = ppm_type; // ppm mode
+
+    if(ppm_type == PPM_CTRL_TYPE_NONE){
+        utility::buffer_append_double16(mSendBuffer, 1500, 1.0, &send_index); //max watt
+        utility::buffer_append_double16(mSendBuffer, 80, 10.0, &send_index);  //motor max
+        utility::buffer_append_double16(mSendBuffer, 40, 10.0, &send_index);   //battery max
+        utility::buffer_append_double16(mSendBuffer, -80, 10.0, &send_index); //motor min
+        utility::buffer_append_double16(mSendBuffer, -20, 10.0, &send_index); //battery min
+        utility::buffer_append_double16(mSendBuffer, 60000, 0.1, &send_index); //motor min
+    }else{
+        utility::buffer_append_double16(mSendBuffer, 10000, 1.0, &send_index); //max watt
+        utility::buffer_append_double16(mSendBuffer, 1000, 10.0, &send_index);  //motor max
+        utility::buffer_append_double16(mSendBuffer, 1000, 10.0, &send_index);   //battery max
+        utility::buffer_append_double16(mSendBuffer, -1000, 10.0, &send_index); //motor min
+        utility::buffer_append_double16(mSendBuffer, -1000, 10.0, &send_index); //motor min
+        utility::buffer_append_double16(mSendBuffer, 200000, 0.1, &send_index); //motor min
+    }
+    return sendPacket(mSendBuffer, send_index);
+}
+
 bool PacketInterface::reboot()
 {
     QByteArray buffer;
