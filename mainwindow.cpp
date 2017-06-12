@@ -56,7 +56,7 @@ MainWindow::MainWindow(QWidget *parent) :
     // Compatible firmwares
     mFwVersionReceived = false;
     mFwRetries = 0;
-    mCompatibleFws.append(qMakePair(2, 53));
+    mCompatibleFws.append(qMakePair(2, 54));
     //mCompatibleFws.append(qMakePair(2, 18));
 
     QString supportedFWs;
@@ -135,8 +135,6 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(mPacketInterface, SIGNAL(decodedChukReceived(double)),
             this, SLOT(decodedChukReceived(double)));
     //Connect our custom signals to show message
-    connect(ui->appconfPpmMaxWattBox,SIGNAL(valueChanged(double)),
-            this,SLOT(updateThrottleCurve(double)));
     connect(ui->y1Throttle,SIGNAL(valueChanged(double)),
             this,SLOT(updateThrottleCurve(double)));
     connect(ui->y2Throttle,SIGNAL(valueChanged(double)),
@@ -168,6 +166,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->mcconfLimCurrentMaxBox,SIGNAL(valueChanged(double)),
             this,SLOT(updateThrottleCurve(double)));
     connect(ui->appconfPpmWattNorevBrakeButton,SIGNAL(clicked(bool)),
+            this,SLOT(updateThrottleCurve(bool)));
+    connect(ui->appconfPpmWattButton,SIGNAL(clicked(bool)),
             this,SLOT(updateThrottleCurve(bool)));
     connect(ui->appconfPpmPIDNoAccelerationButton,SIGNAL(clicked(bool)),
             this,SLOT(updateThrottleCurve(bool)));
@@ -223,15 +223,12 @@ MainWindow::MainWindow(QWidget *parent) :
             this,SLOT(updateThrottleCurve(double)));
     connect(ui->bezierNegReduceFactorBox,SIGNAL(valueChanged(double)),
             this,SLOT(updateThrottleCurve(double)));
-    connect(ui->appconfChukMaxWattBox,SIGNAL(valueChanged(double)),
-            this,SLOT(updateThrottleCurve(double)));
+
+    updateThrottleCurve(0.0);
 
     mSerialization = new Serialization(this);
     
     ui->throttleCurvePlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
-    	
-
-    updateThrottleCurve(ui->appconfPpmMaxWattBox->value());
 
     ui->currentPlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
     ui->voltagePlot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
@@ -390,6 +387,8 @@ mc_configuration MainWindow::getMcconfGui()
     mcconf.l_in_current_min = ui->mcconfLimCurrentInMinBox->value();
     mcconf.l_abs_current_max = ui->mcconfLimCurrentAbsMaxBox->value();
     mcconf.l_slow_abs_current = ui->mcconfLimCurrentSlowAbsMaxBox->isChecked();
+    mcconf.use_max_watt_limit = ui->mcconfUseMaxWattEnabled->isChecked();
+    mcconf.watts_max = ui->mcconfLimWattsMaxBox->value();
     mcconf.l_max_erpm = ui->mcconfLimMaxErpmBox->value();
     mcconf.l_min_erpm = ui->mcconfLimMinErpmBox->value();
     mcconf.l_max_erpm_fbrake = ui->mcconfLimMaxErpmFbrakeBox->value();
@@ -573,6 +572,9 @@ void MainWindow::setMcconfGui(const mc_configuration &mcconf)
     ui->mcconfLimCurrentInMinBox->setValue(mcconf.l_in_current_min);
     ui->mcconfLimCurrentAbsMaxBox->setValue(mcconf.l_abs_current_max);
     ui->mcconfLimCurrentSlowAbsMaxBox->setChecked(mcconf.l_slow_abs_current);
+    ui->mcconfUseMaxWattEnabled->setChecked(mcconf.use_max_watt_limit);
+    ui->mcconfLimWattsMaxBox->setValue(mcconf.watts_max);
+
     ui->mcconfLimMaxErpmBox->setValue(mcconf.l_max_erpm);
     ui->mcconfLimMinErpmBox->setValue(mcconf.l_min_erpm);
     ui->mcconfLimMaxErpmFbrakeBox->setValue(mcconf.l_max_erpm_fbrake);
@@ -1524,173 +1526,171 @@ void MainWindow::ackReceived(QString ackType)
 
 void MainWindow::mcValuesReceived(MC_VALUES values)
 {
-    if (ui->realtimeActivateBox->isChecked()) {
-        const int maxS = 500;
+    const int maxS = 500;
 
-        ui->rtDataWidget->setValues(values);
+    ui->rtDataWidget->setValues(values);
 
-        appendDoubleAndTrunc(&tempMos1Vec, values.temp_mos1, maxS);
-        appendDoubleAndTrunc(&tempMos2Vec, values.temp_mos2, maxS);
-        appendDoubleAndTrunc(&tempMos3Vec, values.temp_mos3, maxS);
-        appendDoubleAndTrunc(&tempMos4Vec, values.temp_mos4, maxS);
-        appendDoubleAndTrunc(&tempMos5Vec, values.temp_mos5, maxS);
-        appendDoubleAndTrunc(&tempMos6Vec, values.temp_mos6, maxS);
-        appendDoubleAndTrunc(&tempPcbVec, values.temp_pcb, maxS);
-        appendDoubleAndTrunc(&currInVec, values.current_in, maxS);
-        appendDoubleAndTrunc(&currMotorVec, values.current_motor, maxS);
-        appendDoubleAndTrunc(&dutyVec, values.duty_now, maxS);
-        appendDoubleAndTrunc(&rpmVec, values.rpm, maxS);
-        appendDoubleAndTrunc(&voltInVec, values.v_in, maxS);
+    appendDoubleAndTrunc(&tempMos1Vec, values.temp_mos1, maxS);
+    appendDoubleAndTrunc(&tempMos2Vec, values.temp_mos2, maxS);
+    appendDoubleAndTrunc(&tempMos3Vec, values.temp_mos3, maxS);
+    appendDoubleAndTrunc(&tempMos4Vec, values.temp_mos4, maxS);
+    appendDoubleAndTrunc(&tempMos5Vec, values.temp_mos5, maxS);
+    appendDoubleAndTrunc(&tempMos6Vec, values.temp_mos6, maxS);
+    appendDoubleAndTrunc(&tempPcbVec, values.temp_pcb, maxS);
+    appendDoubleAndTrunc(&currInVec, values.current_in, maxS);
+    appendDoubleAndTrunc(&currMotorVec, values.current_motor, maxS);
+    appendDoubleAndTrunc(&dutyVec, values.duty_now, maxS);
+    appendDoubleAndTrunc(&rpmVec, values.rpm, maxS);
+    appendDoubleAndTrunc(&voltInVec, values.v_in, maxS);
 
-        QPen dotPen;
-        dotPen.setStyle(Qt::DotLine);
-        dotPen.setColor(Qt::blue);
+    QPen dotPen;
+    dotPen.setStyle(Qt::DotLine);
+    dotPen.setColor(Qt::blue);
 
-        QFont legendFont = font();
-        legendFont.setPointSize(9);
+    QFont legendFont = font();
+    legendFont.setPointSize(9);
 
-        int dataSize = tempMos1Vec.size();
-        float fsamp = 10.0;
+    int dataSize = tempMos1Vec.size();
+    float fsamp = 10.0;
 
-        QVector<double> xAxis(dataSize);
-        for (int i = 0;i < tempMos1Vec.size();i++) {
-            xAxis[i] = (double)i / fsamp;
-        }
-
-        int graphIndex = 0;
-
-        if (!mRealtimeGraphsAdded) {
-            // Temperatures
-            ui->realtimePlotTemperature->addGraph();
-            ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::blue));
-            ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 1");
-            graphIndex++;
-
-            ui->realtimePlotTemperature->addGraph();
-            dotPen.setColor(Qt::blue);
-            ui->realtimePlotTemperature->graph(graphIndex)->setPen(dotPen);
-            ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 2");
-            graphIndex++;
-
-            ui->realtimePlotTemperature->addGraph();
-            ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::red));
-            ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 3");
-            graphIndex++;
-
-            ui->realtimePlotTemperature->addGraph();
-            dotPen.setColor(Qt::red);
-            ui->realtimePlotTemperature->graph(graphIndex)->setPen(dotPen);
-            ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 4");
-            graphIndex++;
-
-            ui->realtimePlotTemperature->addGraph();
-            ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::green));
-            ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 5");
-            graphIndex++;
-
-            ui->realtimePlotTemperature->addGraph();
-            dotPen.setColor(Qt::green);
-            ui->realtimePlotTemperature->graph(graphIndex)->setPen(dotPen);
-            ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 6");
-            graphIndex++;
-
-            ui->realtimePlotTemperature->addGraph();
-            ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::magenta));
-            ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature PCB");
-            graphIndex++;
-
-            // Current and duty
-            graphIndex = 0;
-            ui->realtimePlotRest->addGraph();
-            ui->realtimePlotRest->graph(graphIndex)->setPen(QPen(Qt::blue));
-            ui->realtimePlotRest->graph(graphIndex)->setName("Current in");
-            graphIndex++;
-
-            ui->realtimePlotRest->addGraph();
-            ui->realtimePlotRest->graph(graphIndex)->setPen(QPen(Qt::red));
-            ui->realtimePlotRest->graph(graphIndex)->setName("Current motor");
-            graphIndex++;
-
-            ui->realtimePlotRest->addGraph(ui->realtimePlotRest->xAxis, ui->realtimePlotRest->yAxis2);
-            ui->realtimePlotRest->graph(graphIndex)->setPen(QPen(Qt::green));
-            ui->realtimePlotRest->graph(graphIndex)->setName("Duty cycle");
-            graphIndex++;
-
-            // RPM
-            graphIndex = 0;
-            ui->realtimePlotRpm->addGraph();
-            ui->realtimePlotRpm->graph(graphIndex)->setPen(QPen(Qt::blue));
-            ui->realtimePlotRpm->graph(graphIndex)->setName("ERPM");
-            graphIndex++;
-
-            ui->realtimePlotTemperature->legend->setVisible(true);
-            ui->realtimePlotTemperature->legend->setFont(legendFont);
-            ui->realtimePlotTemperature->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignRight|Qt::AlignBottom);
-            ui->realtimePlotTemperature->legend->setBrush(QBrush(QColor(255,255,255,230)));
-            ui->realtimePlotTemperature->xAxis->setLabel("Seconds (s)");
-            ui->realtimePlotTemperature->yAxis->setLabel("Deg C");
-
-            ui->realtimePlotRest->legend->setVisible(true);
-            ui->realtimePlotRest->legend->setFont(legendFont);
-            ui->realtimePlotRest->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignRight|Qt::AlignBottom);
-            ui->realtimePlotRest->legend->setBrush(QBrush(QColor(255,255,255,230)));
-            ui->realtimePlotRest->xAxis->setLabel("Seconds (s)");
-            ui->realtimePlotRest->yAxis->setLabel("Ampere (A)");
-            ui->realtimePlotRest->yAxis2->setLabel("Duty Cycle");
-
-            ui->realtimePlotRpm->legend->setVisible(true);
-            ui->realtimePlotRpm->legend->setFont(legendFont);
-            ui->realtimePlotRpm->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignRight|Qt::AlignBottom);
-            ui->realtimePlotRpm->legend->setBrush(QBrush(QColor(255,255,255,230)));
-            ui->realtimePlotRpm->xAxis->setLabel("Seconds (s)");
-            ui->realtimePlotRpm->yAxis->setLabel("ERPM");
-
-            ui->realtimePlotTemperature->yAxis->setRange(0, 120);
-            ui->realtimePlotRest->yAxis->setRange(-20, 130);
-            ui->realtimePlotRest->yAxis2->setRange(-0.2, 1.3);
-            ui->realtimePlotRest->yAxis2->setVisible(true);
-            ui->realtimePlotRpm->yAxis->setRange(0, 120);
-
-            mRealtimeGraphsAdded = true;
-
-        }
-
-        // Temperature plot
-        graphIndex = 0;
-        ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos1Vec);
-        ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos2Vec);
-        ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos3Vec);
-        ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos4Vec);
-        ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos5Vec);
-        ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos6Vec);
-        ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempPcbVec);
-
-        // Current and duty-plot
-        graphIndex = 0;
-        ui->realtimePlotRest->graph(graphIndex++)->setData(xAxis, currInVec);
-        ui->realtimePlotRest->graph(graphIndex++)->setData(xAxis, currMotorVec);
-        ui->realtimePlotRest->graph(graphIndex++)->setData(xAxis, dutyVec);
-
-        // RPM plot
-        graphIndex = 0;
-        ui->realtimePlotRpm->graph(graphIndex++)->setData(xAxis, rpmVec);
-
-        if (ui->realtimeAutoScaleBox->isChecked()) {
-            ui->realtimePlotTemperature->rescaleAxes();
-            ui->realtimePlotRest->rescaleAxes();
-            ui->realtimePlotRpm->rescaleAxes();
-        }
-
-        if (dataSize < maxS) {
-            ui->realtimePlotTemperature->xAxis->setRange(0, dataSize / fsamp);
-            ui->realtimePlotRest->xAxis->setRange(0, dataSize / fsamp);
-            ui->realtimePlotRpm->xAxis->setRange(0, dataSize / fsamp);
-        }
-
-        ui->realtimePlotTemperature->replot();
-        ui->realtimePlotRest->replot();
-        ui->realtimePlotRpm->replot();
+    QVector<double> xAxis(dataSize);
+    for (int i = 0;i < tempMos1Vec.size();i++) {
+        xAxis[i] = (double)i / fsamp;
     }
+
+    int graphIndex = 0;
+
+    if (!mRealtimeGraphsAdded) {
+        // Temperatures
+        ui->realtimePlotTemperature->addGraph();
+        ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::blue));
+        ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 1");
+        graphIndex++;
+
+        ui->realtimePlotTemperature->addGraph();
+        dotPen.setColor(Qt::blue);
+        ui->realtimePlotTemperature->graph(graphIndex)->setPen(dotPen);
+        ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 2");
+        graphIndex++;
+
+        ui->realtimePlotTemperature->addGraph();
+        ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::red));
+        ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 3");
+        graphIndex++;
+
+        ui->realtimePlotTemperature->addGraph();
+        dotPen.setColor(Qt::red);
+        ui->realtimePlotTemperature->graph(graphIndex)->setPen(dotPen);
+        ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 4");
+        graphIndex++;
+
+        ui->realtimePlotTemperature->addGraph();
+        ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::green));
+        ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 5");
+        graphIndex++;
+
+        ui->realtimePlotTemperature->addGraph();
+        dotPen.setColor(Qt::green);
+        ui->realtimePlotTemperature->graph(graphIndex)->setPen(dotPen);
+        ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature MOSFET 6");
+        graphIndex++;
+
+        ui->realtimePlotTemperature->addGraph();
+        ui->realtimePlotTemperature->graph(graphIndex)->setPen(QPen(Qt::magenta));
+        ui->realtimePlotTemperature->graph(graphIndex)->setName("Temperature PCB");
+        graphIndex++;
+
+        // Current and duty
+        graphIndex = 0;
+        ui->realtimePlotRest->addGraph();
+        ui->realtimePlotRest->graph(graphIndex)->setPen(QPen(Qt::blue));
+        ui->realtimePlotRest->graph(graphIndex)->setName("Current in");
+        graphIndex++;
+
+        ui->realtimePlotRest->addGraph();
+        ui->realtimePlotRest->graph(graphIndex)->setPen(QPen(Qt::red));
+        ui->realtimePlotRest->graph(graphIndex)->setName("Current motor");
+        graphIndex++;
+
+        ui->realtimePlotRest->addGraph(ui->realtimePlotRest->xAxis, ui->realtimePlotRest->yAxis2);
+        ui->realtimePlotRest->graph(graphIndex)->setPen(QPen(Qt::green));
+        ui->realtimePlotRest->graph(graphIndex)->setName("Duty cycle");
+        graphIndex++;
+
+        // RPM
+        graphIndex = 0;
+        ui->realtimePlotRpm->addGraph();
+        ui->realtimePlotRpm->graph(graphIndex)->setPen(QPen(Qt::blue));
+        ui->realtimePlotRpm->graph(graphIndex)->setName("ERPM");
+        graphIndex++;
+
+        ui->realtimePlotTemperature->legend->setVisible(true);
+        ui->realtimePlotTemperature->legend->setFont(legendFont);
+        ui->realtimePlotTemperature->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignRight|Qt::AlignBottom);
+        ui->realtimePlotTemperature->legend->setBrush(QBrush(QColor(255,255,255,230)));
+        ui->realtimePlotTemperature->xAxis->setLabel("Seconds (s)");
+        ui->realtimePlotTemperature->yAxis->setLabel("Deg C");
+
+        ui->realtimePlotRest->legend->setVisible(true);
+        ui->realtimePlotRest->legend->setFont(legendFont);
+        ui->realtimePlotRest->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignRight|Qt::AlignBottom);
+        ui->realtimePlotRest->legend->setBrush(QBrush(QColor(255,255,255,230)));
+        ui->realtimePlotRest->xAxis->setLabel("Seconds (s)");
+        ui->realtimePlotRest->yAxis->setLabel("Ampere (A)");
+        ui->realtimePlotRest->yAxis2->setLabel("Duty Cycle");
+
+        ui->realtimePlotRpm->legend->setVisible(true);
+        ui->realtimePlotRpm->legend->setFont(legendFont);
+        ui->realtimePlotRpm->axisRect()->insetLayout()->setInsetAlignment(0, Qt::AlignRight|Qt::AlignBottom);
+        ui->realtimePlotRpm->legend->setBrush(QBrush(QColor(255,255,255,230)));
+        ui->realtimePlotRpm->xAxis->setLabel("Seconds (s)");
+        ui->realtimePlotRpm->yAxis->setLabel("ERPM");
+
+        ui->realtimePlotTemperature->yAxis->setRange(0, 120);
+        ui->realtimePlotRest->yAxis->setRange(-20, 130);
+        ui->realtimePlotRest->yAxis2->setRange(-0.2, 1.3);
+        ui->realtimePlotRest->yAxis2->setVisible(true);
+        ui->realtimePlotRpm->yAxis->setRange(0, 120);
+
+        mRealtimeGraphsAdded = true;
+
+    }
+
+    // Temperature plot
+    graphIndex = 0;
+    ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos1Vec);
+    ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos2Vec);
+    ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos3Vec);
+    ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos4Vec);
+    ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos5Vec);
+    ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempMos6Vec);
+    ui->realtimePlotTemperature->graph(graphIndex++)->setData(xAxis, tempPcbVec);
+
+    // Current and duty-plot
+    graphIndex = 0;
+    ui->realtimePlotRest->graph(graphIndex++)->setData(xAxis, currInVec);
+    ui->realtimePlotRest->graph(graphIndex++)->setData(xAxis, currMotorVec);
+    ui->realtimePlotRest->graph(graphIndex++)->setData(xAxis, dutyVec);
+
+    // RPM plot
+    graphIndex = 0;
+    ui->realtimePlotRpm->graph(graphIndex++)->setData(xAxis, rpmVec);
+
+    if (ui->realtimeAutoScaleBox->isChecked()) {
+        ui->realtimePlotTemperature->rescaleAxes();
+        ui->realtimePlotRest->rescaleAxes();
+        ui->realtimePlotRpm->rescaleAxes();
+    }
+
+    if (dataSize < maxS) {
+        ui->realtimePlotTemperature->xAxis->setRange(0, dataSize / fsamp);
+        ui->realtimePlotRest->xAxis->setRange(0, dataSize / fsamp);
+        ui->realtimePlotRpm->xAxis->setRange(0, dataSize / fsamp);
+    }
+
+    ui->realtimePlotTemperature->replot();
+    ui->realtimePlotRest->replot();
+    ui->realtimePlotRpm->replot();
 }
 
 void MainWindow::printReceived(QString str)
@@ -1958,6 +1958,9 @@ void MainWindow::appconfReceived(app_configuration appconf)
     case PPM_CTRL_TYPE_PID_NOREV:
         ui->appconfPpmPidNorevButton->setChecked(true);
         break;
+    case PPM_CTRL_TYPE_WATT:
+        ui->appconfPpmWattButton->setChecked(true);
+        break;
     case PPM_CTRL_TYPE_WATT_NOREV_BRAKE:
         ui->appconfPpmWattNorevBrakeButton->setChecked(true);
         break;
@@ -1991,11 +1994,11 @@ void MainWindow::appconfReceived(app_configuration appconf)
     ui->appconfPpmTcBox->setChecked(appconf.app_ppm_conf.tc);
     ui->appconfPpmTcErpmBox->setValue(appconf.app_ppm_conf.tc_max_diff);
     ui->appconfPpmTcOffsetBox->setValue(appconf.app_ppm_conf.tc_offset);
+    ui->negativePPMCruiseControlDropDown->setCurrentIndex(appconf.app_ppm_conf.cruise_left);
+    ui->positivePPMCruiseControlDropDown->setCurrentIndex(appconf.app_ppm_conf.cruise_right);
+    ui->appconfPpmMaxErpmDirActive->setChecked(appconf.app_ppm_conf.max_erpm_for_dir_active);
+    ui->appconfPpmMaxErpmDirBox->setValue(appconf.app_ppm_conf.max_erpm_for_dir);
     
-    ui->appconfPpmDefineMaxWattBox->setChecked(appconf.app_ppm_conf.max_watt_enabled);
-    ui->appconfPpmMaxWattBox->setValue(appconf.app_ppm_conf.max_watt);
-    ui->appconfPpmMaxWattFactorBox->setValue(appconf.app_ppm_conf.max_watt_ramp_factor);
-
     ui->appconfAdjustableThrottle->setChecked(appconf.app_throttle_conf.adjustable_throttle_enabled);
     ui->y1Throttle->setValue(appconf.app_throttle_conf.y1_throttle * 100.0);
     ui->y2Throttle->setValue(appconf.app_throttle_conf.y2_throttle * 100.0);
@@ -2117,11 +2120,8 @@ void MainWindow::appconfReceived(app_configuration appconf)
     ui->appconfChukTcBox->setChecked(appconf.app_chuk_conf.tc);
     ui->appconfChukTcErpmBox->setValue(appconf.app_chuk_conf.tc_max_diff);
     ui->appconfChukTcOffsetBox->setValue(appconf.app_chuk_conf.tc_offset);
+    ui->checkBoxMirrorButtons->setChecked(appconf.app_chuk_conf.buttons_mirrored);
     
-    ui->appconfChukDefineMaxWattBox->setChecked(appconf.app_chuk_conf.max_watt_enabled);
-    ui->appconfChukMaxWattBox->setValue(appconf.app_chuk_conf.max_watt);
-    ui->appconfChukMaxWattFactorBox->setValue(appconf.app_chuk_conf.max_watt_ramp_factor);
-
     // NRF
     switch (appconf.app_nrf_conf.speed) {
     case NRF_SPEED_250K:
@@ -2780,23 +2780,29 @@ void MainWindow::on_experimentSaveSamplesButton_clicked()
 
 void MainWindow::on_mcconfReadButton_clicked()
 {
-    mPacketInterface->getMcconf();
+    if(checkIfVescIsConnected()){
+        mPacketInterface->getMcconf();
+    }
 }
 
 void MainWindow::on_mcconfReadDefaultButton_clicked()
 {
-    mPacketInterface->getMcconfDefault();
+    if(checkIfVescIsConnected()){
+        mPacketInterface->getMcconfDefault();
+    }
 }
 
 void MainWindow::on_mcconfWriteButton_clicked()
 {
-    if (!mMcconfLoaded) {
-        QMessageBox messageBox;
-        messageBox.critical(this, "Error", "The configuration should be read or loaded at least once before writing it.");
-        return;
-    }
+    if(checkIfVescIsConnected()){
+        if (!mMcconfLoaded) {
+            QMessageBox messageBox;
+            messageBox.critical(this, "Error", "The configuration should be read or loaded at least once before writing it.");
+            return;
+        }
 
-    mPacketInterface->setMcconf(getMcconfGui());
+        mPacketInterface->setMcconf(getMcconfGui());
+    }
 }
 
 void MainWindow::on_currentBrakeButton_clicked()
@@ -2840,236 +2846,246 @@ void MainWindow::on_mcconfDetectMotorParamButton_clicked()
 
 void MainWindow::on_appconfReadButton_clicked()
 {
-    mPacketInterface->getAppConf();
+    if (checkIfVescIsConnected()){
+        mPacketInterface->getAppConf();
+    }
 }
 
 void MainWindow::on_appconfReadDefaultButton_clicked()
 {
-    mPacketInterface->getAppConfDefault();
+    if (checkIfVescIsConnected()){
+        mPacketInterface->getAppConfDefault();
+    }
 }
 
 void MainWindow::on_appconfWriteButton_clicked()
 {
-    if (!mAppconfLoaded) {
-        QMessageBox messageBox;
-        messageBox.critical(this, "Error", "The configuration should be read at least once before writing it.");
-        return;
+    if (checkIfVescIsConnected()){
+        if (!mAppconfLoaded) {
+            QMessageBox messageBox;
+            messageBox.critical(this, "Error", "The configuration should be read at least once before writing it.");
+            return;
+        }
+
+        app_configuration appconf;
+
+        appconf.controller_id = ui->appconfControllerIdBox->value();
+        appconf.timeout_msec = ui->appconfTimeoutBox->value();
+        appconf.timeout_brake_current = ui->appconfTimeoutBrakeCurrentBox->value();
+        appconf.send_can_status = ui->appconfSendCanStatusBox->isChecked();
+        appconf.send_can_status_rate_hz = ui->appconfSendCanStatusRateBox->value();
+
+        if (ui->appconfUseNoAppButton->isChecked()) {
+            appconf.app_to_use = APP_NONE;
+        } else if (ui->appconfUsePpmButton->isChecked()) {
+            appconf.app_to_use = APP_PPM;
+        } else if (ui->appconfUseAdcButton->isChecked()) {
+            appconf.app_to_use = APP_ADC;
+        } else if (ui->appconfUseUartButton->isChecked()) {
+            appconf.app_to_use = APP_UART;
+        } else if (ui->appconfUsePpmUartButton->isChecked()) {
+            appconf.app_to_use = APP_PPM_UART;
+        } else if (ui->appconfUseAdcUartButton->isChecked()) {
+            appconf.app_to_use = APP_ADC_UART;
+        } else if (ui->appconfUseNunchukButton->isChecked()) {
+            appconf.app_to_use = APP_NUNCHUK;
+        } else if (ui->appconfUseNrfButton->isChecked()) {
+            appconf.app_to_use = APP_NRF;
+        } else if (ui->appconfUseCustomButton->isChecked()) {
+            appconf.app_to_use = APP_CUSTOM;
+        }
+
+        // PPM
+        if (ui->appconfPpmDisabledButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_NONE;
+        } else if (ui->appconfPpmCurrentButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT;
+        } else if (ui->appconfPpmCurrentNorevButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT_NOREV;
+        } else if (ui->appconfPpmCurrentNorevBrakeButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT_NOREV_BRAKE;
+        } else if (ui->appconfPpmDutyButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_DUTY;
+        } else if (ui->appconfPpmDutyNorevButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_DUTY_NOREV;
+        } else if (ui->appconfPpmPidButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID;
+        } else if (ui->appconfPpmPidNorevButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID_NOREV;
+        } else if (ui->appconfPpmWattButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_WATT;
+        } else if (ui->appconfPpmWattNorevBrakeButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_WATT_NOREV_BRAKE;
+        } else if (ui->appconfPpmPIDNoAccelerationButton->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID_NOACCELERATION;
+        } else if (ui->appconfPpmCruiseControlSecondaryChannel->isChecked()) {
+            appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CRUISE_CONTROL_SECONDARY_CHANNEL;
+        }
+
+        appconf.app_ppm_conf.pid_max_erpm = ui->appconfPpmPidMaxErpmBox->value();
+        appconf.app_ppm_conf.hyst = ui->appconfPpmHystBox->value();
+        appconf.app_ppm_conf.pulse_start = ui->appconfPpmPulseStartBox->value();
+        appconf.app_ppm_conf.pulse_center = ui->appconfPpmPulseCenterBox->value();
+        appconf.app_ppm_conf.pulse_end = ui->appconfPpmPulseWidthBox->value();
+        appconf.app_ppm_conf.median_filter = ui->appconfPpmMedianFilterBox->isChecked();
+        appconf.app_ppm_conf.safe_start = ui->appconfPpmSafeStartBox->isChecked();
+
+        if (ui->appconfPpmRpmLimBox->isChecked()) {
+            appconf.app_ppm_conf.rpm_lim_start = ui->appconfPpmRpmLimStartBox->value();
+            appconf.app_ppm_conf.rpm_lim_end = ui->appconfPpmRpmLimEndBox->value();
+        } else {
+            appconf.app_ppm_conf.rpm_lim_start = 200000.0;
+            appconf.app_ppm_conf.rpm_lim_end = 250000.0;
+        }
+
+        appconf.app_ppm_conf.multi_esc = ui->appconfPpmMultiGroup->isChecked();
+        appconf.app_ppm_conf.tc = ui->appconfPpmTcBox->isChecked();
+        appconf.app_ppm_conf.tc_max_diff = ui->appconfPpmTcErpmBox->value();
+        appconf.app_ppm_conf.tc_offset = ui->appconfPpmTcOffsetBox->value();
+
+        appconf.app_ppm_conf.cruise_left = static_cast<ppm_cruise>(ui->negativePPMCruiseControlDropDown->currentIndex());
+        appconf.app_ppm_conf.cruise_right = static_cast<ppm_cruise>(ui->positivePPMCruiseControlDropDown->currentIndex());
+        appconf.app_ppm_conf.max_erpm_for_dir_active = ui->appconfPpmMaxErpmDirActive->isChecked();
+        appconf.app_ppm_conf.max_erpm_for_dir = ui->appconfPpmMaxErpmDirBox->value();
+
+        // ADC
+        if (ui->appconfAdcDisabledButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_NONE;
+        } else if (ui->appconfAdcCurrentButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT;
+        } else if (ui->appconfAdcCurrentCenterButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_REV_CENTER;
+        } else if (ui->appconfAdcCurrentButtonButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_REV_BUTTON;
+        } else if (ui->appconfAdcCurrentNorevCenterButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER;
+        } else if (ui->appconfAdcCurrentNorevButtonButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON;
+        } else if (ui->appconfAdcCurrentNorevAdcButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_ADC;
+        } else if (ui->appconfAdcDutyCycleButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_DUTY;
+        } else if (ui->appconfAdcDutyCycleCenterButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_DUTY_REV_CENTER;
+        } else if (ui->appconfAdcDutyCycleButtonButton->isChecked()) {
+            appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_DUTY_REV_BUTTON;
+        }
+
+        appconf.app_adc_conf.update_rate_hz = ui->appconfAdcUpdateRateBox->value();
+        appconf.app_adc_conf.hyst = ui->appconfAdcHystBox->value();
+        appconf.app_adc_conf.voltage_start = ui->appconfAdcVoltageStartBox->value();
+        appconf.app_adc_conf.voltage_end = ui->appconfAdcVoltageEndBox->value();
+        appconf.app_adc_conf.use_filter = ui->appconfAdcFilterBox->isChecked();
+        appconf.app_adc_conf.safe_start = ui->appconfAdcSafeStartBox->isChecked();
+        appconf.app_adc_conf.cc_button_inverted = ui->appconfAdcInvertCcButtonBox->isChecked();
+        appconf.app_adc_conf.rev_button_inverted = ui->appconfAdcInvertRevButtonBox->isChecked();
+        appconf.app_adc_conf.voltage_inverted = ui->appconfAdcInvertVoltageBox->isChecked();
+
+        if (ui->appconfAdcRpmLimBox->isChecked()) {
+            appconf.app_adc_conf.rpm_lim_start = ui->appconfAdcRpmLimStartBox->value();
+            appconf.app_adc_conf.rpm_lim_end = ui->appconfAdcRpmLimEndBox->value();
+        } else {
+            appconf.app_adc_conf.rpm_lim_start = 200000.0;
+            appconf.app_adc_conf.rpm_lim_end = 250000.0;
+        }
+
+        appconf.app_adc_conf.multi_esc = ui->appconfAdcMultiGroup->isChecked();
+        appconf.app_adc_conf.tc = ui->appconfAdcTcBox->isChecked();
+        appconf.app_adc_conf.tc_max_diff = ui->appconfAdcTcErpmBox->value();
+
+        // UART
+        appconf.app_uart_baudrate = ui->appconfUartBaudBox->value();
+
+        // Nunchuk
+        if (ui->appconfChukDisabledButton->isChecked()) {
+            appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_NONE;
+        } else if (ui->appconfChukCurrentButton->isChecked()) {
+            appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_CURRENT;
+        } else if (ui->appconfChukCurrentNorevButton->isChecked()) {
+            appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_CURRENT_NOREV;
+        } else if (ui->appconfChukWattButton->isChecked()) {
+            appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_WATT;
+        } else if (ui->appconfChukWattNorevButton->isChecked()) {
+            appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_WATT_NOREV;
+        }
+
+        appconf.app_chuk_conf.hyst = ui->appconfChukHystBox->value();
+        appconf.app_chuk_conf.rpm_lim_start = ui->appconfChukRpmLimStartBox->value();
+        appconf.app_chuk_conf.rpm_lim_end = ui->appconfChukRpmLimEndBox->value();
+        appconf.app_chuk_conf.ramp_time_pos = ui->appconfChukRampTimePosBox->value();
+        appconf.app_chuk_conf.ramp_time_neg = ui->appconfChukRampTimeNegBox->value();
+        appconf.app_chuk_conf.stick_erpm_per_s_in_cc = ui->appconfChukErpmPerSBox->value();
+        appconf.app_chuk_conf.multi_esc = ui->appconfChukMultiGroup->isChecked();
+        appconf.app_chuk_conf.tc = ui->appconfChukTcBox->isChecked();
+        appconf.app_chuk_conf.tc_max_diff = ui->appconfChukTcErpmBox->value();
+        appconf.app_chuk_conf.tc_offset = ui->appconfChukTcOffsetBox->value();
+        appconf.app_chuk_conf.buttons_mirrored = ui->checkBoxMirrorButtons->isChecked();
+
+        // NRF
+        if (ui->appconfNrfSpeed250kButton->isChecked()) {
+            appconf.app_nrf_conf.speed = NRF_SPEED_250K;
+        } else if (ui->appconfNrfSpeed1mButton->isChecked()) {
+            appconf.app_nrf_conf.speed = NRF_SPEED_1M;
+        } else if (ui->appconfNrfSpeed2mButton->isChecked()) {
+            appconf.app_nrf_conf.speed = NRF_SPEED_2M;
+        }
+
+        if (ui->appconfNrfPowerM18Button->isChecked()) {
+            appconf.app_nrf_conf.power = NRF_POWER_M18DBM;
+        } else if (ui->appconfNrfPowerM6Button->isChecked()) {
+            appconf.app_nrf_conf.power = NRF_POWER_M6DBM;
+        } else if (ui->appconfNrfPowerM6Button->isChecked()) {
+            appconf.app_nrf_conf.power = NRF_POWER_M6DBM;
+        } else if (ui->appconfNrfPower0Button->isChecked()) {
+            appconf.app_nrf_conf.power = NRF_POWER_0DBM;
+        }
+
+        if (ui->appconfNrfCrc1BButton->isChecked()) {
+            appconf.app_nrf_conf.crc_type = NRF_CRC_1B;
+        } else if (ui->appconfNrfCrc2BButton->isChecked()) {
+            appconf.app_nrf_conf.crc_type = NRF_CRC_2B;
+        }
+
+        appconf.app_nrf_conf.retry_delay = (NRF_RETR_DELAY)ui->appconfNrfRetrDelayBox->currentIndex();
+        appconf.app_nrf_conf.retries = ui->appconfNrfRetrBox->value();
+        appconf.app_nrf_conf.channel = ui->appconfNrfChannelBox->value();
+        appconf.app_nrf_conf.send_crc_ack = ui->appconfNrfUseAckBox->isChecked();
+        appconf.app_nrf_conf.address[0] = ui->appconfNrfAddrB0Box->value();
+        appconf.app_nrf_conf.address[1] = ui->appconfNrfAddrB1Box->value();
+        appconf.app_nrf_conf.address[2] = ui->appconfNrfAddrB2Box->value();
+
+        appconf.app_throttle_conf.adjustable_throttle_enabled = ui->appconfAdjustableThrottle->isChecked();
+        appconf.app_throttle_conf.y1_throttle = ui->y1Throttle->value() / 100.0;
+        appconf.app_throttle_conf.y2_throttle = ui->y2Throttle->value() / 100.0;
+        appconf.app_throttle_conf.y3_throttle = ui->y3Throttle->value() / 100.0;
+        appconf.app_throttle_conf.x1_throttle = ui->x1Throttle->value() / 100.0;
+        appconf.app_throttle_conf.x2_throttle = ui->x2Throttle->value() / 100.0;
+        appconf.app_throttle_conf.x3_throttle = ui->x3Throttle->value() / 100.0;
+        appconf.app_throttle_conf.bezier_reduce_factor = ui->bezierReduceFactorBox->value();
+        appconf.app_throttle_conf.y1_neg_throttle = -ui->y1NegThrottle->value() / 100.0;
+        appconf.app_throttle_conf.y2_neg_throttle = -ui->y2NegThrottle->value() / 100.0;
+        appconf.app_throttle_conf.y3_neg_throttle = -ui->y3NegThrottle->value() / 100.0;
+        appconf.app_throttle_conf.x1_neg_throttle = -ui->x1NegThrottle->value() / 100.0;
+        appconf.app_throttle_conf.x2_neg_throttle = -ui->x2NegThrottle->value() / 100.0;
+        appconf.app_throttle_conf.x3_neg_throttle = -ui->x3NegThrottle->value() / 100.0;
+        appconf.app_throttle_conf.bezier_neg_reduce_factor = ui->bezierNegReduceFactorBox->value();
+
+        mPacketInterface->setAppConf(appconf);
     }
-
-    app_configuration appconf;
-
-    appconf.controller_id = ui->appconfControllerIdBox->value();
-    appconf.timeout_msec = ui->appconfTimeoutBox->value();
-    appconf.timeout_brake_current = ui->appconfTimeoutBrakeCurrentBox->value();
-    appconf.send_can_status = ui->appconfSendCanStatusBox->isChecked();
-    appconf.send_can_status_rate_hz = ui->appconfSendCanStatusRateBox->value();
-
-    if (ui->appconfUseNoAppButton->isChecked()) {
-        appconf.app_to_use = APP_NONE;
-    } else if (ui->appconfUsePpmButton->isChecked()) {
-        appconf.app_to_use = APP_PPM;
-    } else if (ui->appconfUseAdcButton->isChecked()) {
-        appconf.app_to_use = APP_ADC;
-    } else if (ui->appconfUseUartButton->isChecked()) {
-        appconf.app_to_use = APP_UART;
-    } else if (ui->appconfUsePpmUartButton->isChecked()) {
-        appconf.app_to_use = APP_PPM_UART;
-    } else if (ui->appconfUseAdcUartButton->isChecked()) {
-        appconf.app_to_use = APP_ADC_UART;
-    } else if (ui->appconfUseNunchukButton->isChecked()) {
-        appconf.app_to_use = APP_NUNCHUK;
-    } else if (ui->appconfUseNrfButton->isChecked()) {
-        appconf.app_to_use = APP_NRF;
-    } else if (ui->appconfUseCustomButton->isChecked()) {
-        appconf.app_to_use = APP_CUSTOM;
-    }
-
-    // PPM
-    if (ui->appconfPpmDisabledButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_NONE;
-    } else if (ui->appconfPpmCurrentButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT;
-    } else if (ui->appconfPpmCurrentNorevButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT_NOREV;
-    } else if (ui->appconfPpmCurrentNorevBrakeButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CURRENT_NOREV_BRAKE;
-    } else if (ui->appconfPpmDutyButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_DUTY;
-    } else if (ui->appconfPpmDutyNorevButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_DUTY_NOREV;
-    } else if (ui->appconfPpmPidButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID;
-    } else if (ui->appconfPpmPidNorevButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID_NOREV;
-    } else if (ui->appconfPpmWattNorevBrakeButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_WATT_NOREV_BRAKE;
-    } else if (ui->appconfPpmPIDNoAccelerationButton->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID_NOACCELERATION;
-    } else if (ui->appconfPpmCruiseControlSecondaryChannel->isChecked()) {
-        appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_CRUISE_CONTROL_SECONDARY_CHANNEL;
-    }
-
-    appconf.app_ppm_conf.pid_max_erpm = ui->appconfPpmPidMaxErpmBox->value();
-    appconf.app_ppm_conf.hyst = ui->appconfPpmHystBox->value();
-    appconf.app_ppm_conf.pulse_start = ui->appconfPpmPulseStartBox->value();
-    appconf.app_ppm_conf.pulse_center = ui->appconfPpmPulseCenterBox->value();
-    appconf.app_ppm_conf.pulse_end = ui->appconfPpmPulseWidthBox->value();
-    appconf.app_ppm_conf.median_filter = ui->appconfPpmMedianFilterBox->isChecked();
-    appconf.app_ppm_conf.safe_start = ui->appconfPpmSafeStartBox->isChecked();
-
-    if (ui->appconfPpmRpmLimBox->isChecked()) {
-        appconf.app_ppm_conf.rpm_lim_start = ui->appconfPpmRpmLimStartBox->value();
-        appconf.app_ppm_conf.rpm_lim_end = ui->appconfPpmRpmLimEndBox->value();
-    } else {
-        appconf.app_ppm_conf.rpm_lim_start = 200000.0;
-        appconf.app_ppm_conf.rpm_lim_end = 250000.0;
-    }
-
-    appconf.app_ppm_conf.multi_esc = ui->appconfPpmMultiGroup->isChecked();
-    appconf.app_ppm_conf.tc = ui->appconfPpmTcBox->isChecked();
-    appconf.app_ppm_conf.tc_max_diff = ui->appconfPpmTcErpmBox->value();
-    appconf.app_ppm_conf.tc_offset = ui->appconfPpmTcOffsetBox->value();
-    
-    appconf.app_ppm_conf.max_watt_enabled = ui->appconfPpmDefineMaxWattBox->isChecked();
-    appconf.app_ppm_conf.max_watt = ui->appconfPpmMaxWattBox->value();
-    appconf.app_ppm_conf.max_watt_ramp_factor = ui->appconfPpmMaxWattFactorBox->value();
-
-    // ADC
-    if (ui->appconfAdcDisabledButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_NONE;
-    } else if (ui->appconfAdcCurrentButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT;
-    } else if (ui->appconfAdcCurrentCenterButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_REV_CENTER;
-    } else if (ui->appconfAdcCurrentButtonButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_REV_BUTTON;
-    } else if (ui->appconfAdcCurrentNorevCenterButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_CENTER;
-    } else if (ui->appconfAdcCurrentNorevButtonButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_BUTTON;
-    } else if (ui->appconfAdcCurrentNorevAdcButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_CURRENT_NOREV_BRAKE_ADC;
-    } else if (ui->appconfAdcDutyCycleButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_DUTY;
-    } else if (ui->appconfAdcDutyCycleCenterButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_DUTY_REV_CENTER;
-    } else if (ui->appconfAdcDutyCycleButtonButton->isChecked()) {
-        appconf.app_adc_conf.ctrl_type = ADC_CTRL_TYPE_DUTY_REV_BUTTON;
-    }
-
-    appconf.app_adc_conf.update_rate_hz = ui->appconfAdcUpdateRateBox->value();
-    appconf.app_adc_conf.hyst = ui->appconfAdcHystBox->value();
-    appconf.app_adc_conf.voltage_start = ui->appconfAdcVoltageStartBox->value();
-    appconf.app_adc_conf.voltage_end = ui->appconfAdcVoltageEndBox->value();
-    appconf.app_adc_conf.use_filter = ui->appconfAdcFilterBox->isChecked();
-    appconf.app_adc_conf.safe_start = ui->appconfAdcSafeStartBox->isChecked();
-    appconf.app_adc_conf.cc_button_inverted = ui->appconfAdcInvertCcButtonBox->isChecked();
-    appconf.app_adc_conf.rev_button_inverted = ui->appconfAdcInvertRevButtonBox->isChecked();
-    appconf.app_adc_conf.voltage_inverted = ui->appconfAdcInvertVoltageBox->isChecked();
-
-    if (ui->appconfAdcRpmLimBox->isChecked()) {
-        appconf.app_adc_conf.rpm_lim_start = ui->appconfAdcRpmLimStartBox->value();
-        appconf.app_adc_conf.rpm_lim_end = ui->appconfAdcRpmLimEndBox->value();
-    } else {
-        appconf.app_adc_conf.rpm_lim_start = 200000.0;
-        appconf.app_adc_conf.rpm_lim_end = 250000.0;
-    }
-
-    appconf.app_adc_conf.multi_esc = ui->appconfAdcMultiGroup->isChecked();
-    appconf.app_adc_conf.tc = ui->appconfAdcTcBox->isChecked();
-    appconf.app_adc_conf.tc_max_diff = ui->appconfAdcTcErpmBox->value();
-
-    // UART
-    appconf.app_uart_baudrate = ui->appconfUartBaudBox->value();
-
-    // Nunchuk
-    if (ui->appconfChukDisabledButton->isChecked()) {
-        appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_NONE;
-    } else if (ui->appconfChukCurrentButton->isChecked()) {
-        appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_CURRENT;
-    } else if (ui->appconfChukCurrentNorevButton->isChecked()) {
-        appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_CURRENT_NOREV;
-    } else if (ui->appconfChukWattButton->isChecked()) {
-        appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_WATT;
-    } else if (ui->appconfChukWattNorevButton->isChecked()) {
-        appconf.app_chuk_conf.ctrl_type = CHUK_CTRL_TYPE_WATT_NOREV;
-    }
-
-    appconf.app_chuk_conf.hyst = ui->appconfChukHystBox->value();
-    appconf.app_chuk_conf.rpm_lim_start = ui->appconfChukRpmLimStartBox->value();
-    appconf.app_chuk_conf.rpm_lim_end = ui->appconfChukRpmLimEndBox->value();
-    appconf.app_chuk_conf.ramp_time_pos = ui->appconfChukRampTimePosBox->value();
-    appconf.app_chuk_conf.ramp_time_neg = ui->appconfChukRampTimeNegBox->value();
-    appconf.app_chuk_conf.stick_erpm_per_s_in_cc = ui->appconfChukErpmPerSBox->value();
-    appconf.app_chuk_conf.multi_esc = ui->appconfChukMultiGroup->isChecked();
-    appconf.app_chuk_conf.tc = ui->appconfChukTcBox->isChecked();
-    appconf.app_chuk_conf.tc_max_diff = ui->appconfChukTcErpmBox->value();
-    appconf.app_chuk_conf.tc_offset = ui->appconfChukTcOffsetBox->value();
-    
-    appconf.app_chuk_conf.max_watt_enabled = ui->appconfChukDefineMaxWattBox->isChecked();
-    appconf.app_chuk_conf.max_watt = ui->appconfChukMaxWattBox->value();
-    appconf.app_chuk_conf.max_watt_ramp_factor = ui->appconfChukMaxWattFactorBox->value();
-
-    // NRF
-    if (ui->appconfNrfSpeed250kButton->isChecked()) {
-        appconf.app_nrf_conf.speed = NRF_SPEED_250K;
-    } else if (ui->appconfNrfSpeed1mButton->isChecked()) {
-        appconf.app_nrf_conf.speed = NRF_SPEED_1M;
-    } else if (ui->appconfNrfSpeed2mButton->isChecked()) {
-        appconf.app_nrf_conf.speed = NRF_SPEED_2M;
-    }
-
-    if (ui->appconfNrfPowerM18Button->isChecked()) {
-        appconf.app_nrf_conf.power = NRF_POWER_M18DBM;
-    } else if (ui->appconfNrfPowerM6Button->isChecked()) {
-        appconf.app_nrf_conf.power = NRF_POWER_M6DBM;
-    } else if (ui->appconfNrfPowerM6Button->isChecked()) {
-        appconf.app_nrf_conf.power = NRF_POWER_M6DBM;
-    } else if (ui->appconfNrfPower0Button->isChecked()) {
-        appconf.app_nrf_conf.power = NRF_POWER_0DBM;
-    }
-
-    if (ui->appconfNrfCrc1BButton->isChecked()) {
-        appconf.app_nrf_conf.crc_type = NRF_CRC_1B;
-    } else if (ui->appconfNrfCrc2BButton->isChecked()) {
-        appconf.app_nrf_conf.crc_type = NRF_CRC_2B;
-    }
-
-    appconf.app_nrf_conf.retry_delay = (NRF_RETR_DELAY)ui->appconfNrfRetrDelayBox->currentIndex();
-    appconf.app_nrf_conf.retries = ui->appconfNrfRetrBox->value();
-    appconf.app_nrf_conf.channel = ui->appconfNrfChannelBox->value();
-    appconf.app_nrf_conf.send_crc_ack = ui->appconfNrfUseAckBox->isChecked();
-    appconf.app_nrf_conf.address[0] = ui->appconfNrfAddrB0Box->value();
-    appconf.app_nrf_conf.address[1] = ui->appconfNrfAddrB1Box->value();
-    appconf.app_nrf_conf.address[2] = ui->appconfNrfAddrB2Box->value();
-    
-    appconf.app_throttle_conf.adjustable_throttle_enabled = ui->appconfAdjustableThrottle->isChecked();
-    appconf.app_throttle_conf.y1_throttle = ui->y1Throttle->value() / 100.0;
-    appconf.app_throttle_conf.y2_throttle = ui->y2Throttle->value() / 100.0;
-    appconf.app_throttle_conf.y3_throttle = ui->y3Throttle->value() / 100.0;
-    appconf.app_throttle_conf.x1_throttle = ui->x1Throttle->value() / 100.0;
-    appconf.app_throttle_conf.x2_throttle = ui->x2Throttle->value() / 100.0;
-    appconf.app_throttle_conf.x3_throttle = ui->x3Throttle->value() / 100.0;
-    appconf.app_throttle_conf.bezier_reduce_factor = ui->bezierReduceFactorBox->value();
-    appconf.app_throttle_conf.y1_neg_throttle = -ui->y1NegThrottle->value() / 100.0;
-    appconf.app_throttle_conf.y2_neg_throttle = -ui->y2NegThrottle->value() / 100.0;
-    appconf.app_throttle_conf.y3_neg_throttle = -ui->y3NegThrottle->value() / 100.0;
-    appconf.app_throttle_conf.x1_neg_throttle = -ui->x1NegThrottle->value() / 100.0;
-    appconf.app_throttle_conf.x2_neg_throttle = -ui->x2NegThrottle->value() / 100.0;
-    appconf.app_throttle_conf.x3_neg_throttle = -ui->x3NegThrottle->value() / 100.0;
-    appconf.app_throttle_conf.bezier_neg_reduce_factor = ui->bezierNegReduceFactorBox->value();
-
-    mPacketInterface->setAppConf(appconf);
 }
 
 void MainWindow::on_appconfRebootButton_clicked()
 {
-    mPacketInterface->reboot();
+    if (checkIfVescIsConnected()){
+        mPacketInterface->reboot();
+    }
 }
 
 void MainWindow::on_posCtrlButton_clicked()
 {
-    mPacketInterface->setPos(ui->posCtrlBox->value());
+    if (checkIfVescIsConnected()){
+        mPacketInterface->setPos(ui->posCtrlBox->value());
+    }
 }
 
 void MainWindow::on_firmwareChooseButton_clicked()
@@ -3092,37 +3108,41 @@ void MainWindow::on_firmwareChooseButton_clicked()
 
 void MainWindow::on_firmwareUploadButton_clicked()
 {
-    QFile file(ui->firmwareEdit->text());
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox messageBox;
-        messageBox.critical(this, "Error", "Could not open file. Make sure that the path is valid.");
-        return;
+    if (checkIfVescIsConnected()){
+        QFile file(ui->firmwareEdit->text());
+        if (!file.open(QIODevice::ReadOnly)) {
+            QMessageBox messageBox;
+            messageBox.critical(this, "Error", "Could not open file. Make sure that the path is valid.");
+            return;
+        }
+
+        if (file.size() > 400000) {
+            QMessageBox messageBox;
+            messageBox.critical(this, "Error", "The selected file is too large to be a firmware.");
+            return;
+        }
+
+        QFileInfo fileInfo(file.fileName());
+
+        if (!(fileInfo.fileName().startsWith("BLDC_4") || fileInfo.fileName().startsWith("VESC"))
+                || !fileInfo.fileName().endsWith(".bin")) {
+            QMessageBox messageBox;
+            messageBox.critical(this, "Error", "The selected file name seems invalid.");
+            return;
+        }
+
+        QByteArray fw = file.readAll();
+        mPacketInterface->startFirmwareUpload(fw);
     }
-
-    if (file.size() > 400000) {
-        QMessageBox messageBox;
-        messageBox.critical(this, "Error", "The selected file is too large to be a firmware.");
-        return;
-    }
-
-    QFileInfo fileInfo(file.fileName());
-
-    if (!(fileInfo.fileName().startsWith("BLDC_4") || fileInfo.fileName().startsWith("VESC"))
-            || !fileInfo.fileName().endsWith(".bin")) {
-        QMessageBox messageBox;
-        messageBox.critical(this, "Error", "The selected file name seems invalid.");
-        return;
-    }
-
-    QByteArray fw = file.readAll();
-    mPacketInterface->startFirmwareUpload(fw);
 }
 
 void MainWindow::on_firmwareVersionReadButton_clicked()
 {
-    mFwVersionReceived = false;
-    mFwRetries = 0;
-    mPacketInterface->getFwVersion();
+    if (checkIfVescIsConnected()){
+        mFwVersionReceived = false;
+        mFwRetries = 0;
+        mPacketInterface->getFwVersion();
+    }
 }
 
 void MainWindow::on_firmwareCancelButton_clicked()
@@ -3270,7 +3290,9 @@ void MainWindow::on_mcconfDetectApplyButton_clicked()
 
 void MainWindow::on_mcconfFocMeasureEncoderButton_clicked()
 {
-    mPacketInterface->measureEncoder(ui->mcconfFocMeasureEncoderCurrentBox->value());
+    if(checkIfVescIsConnected()){
+        mPacketInterface->measureEncoder(ui->mcconfFocMeasureEncoderCurrentBox->value());
+    }
 }
 
 void MainWindow::on_mcconfFocMeasureEncoderApplyButton_clicked()
@@ -3344,7 +3366,10 @@ void MainWindow::on_ppmSignalAutoWizard_clicked()
         msgBox.addButton(QMessageBox::Cancel);
         msgBox.setDefaultButton(QMessageBox::Cancel);
         if(msgBox.exec() == QMessageBox::Ok){
-            if(min_ppm_last_len < actual_ppm_last_len - 0.2 && max_ppm_last_len > actual_ppm_last_len + 0.2){
+            if(min_ppm_last_len < actual_ppm_last_len - 0.2
+                    && min_ppm_last_len > 0.4
+                    && max_ppm_last_len > actual_ppm_last_len + 0.2
+                    && max_ppm_last_len < 2.6){
                 ui->appconfPpmPulseStartBox->setValue((((int)(min_ppm_last_len * 100)) + 2) / 100.0);
                 ui->appconfPpmPulseCenterBox->setValue(actual_ppm_last_len);
                 ui->appconfPpmPulseWidthBox->setValue((((int)(max_ppm_last_len * 100)) - 2) / 100.0);
@@ -3354,7 +3379,18 @@ void MainWindow::on_ppmSignalAutoWizard_clicked()
 
             } else {
                 QMessageBox msgBox2;
-                msgBox2.warning(this, "Warning", "WARNING: The detection went wrong, please repeat it.");
+                if (min_ppm_last_len > actual_ppm_last_len - 0.2) {
+                    msgBox2.warning(this, "Warning", "WARNING: The detection went wrong, the minimum Pulsewidth is too close to the center position.");
+                } else if (min_ppm_last_len <= 0.4) {
+                    msgBox2.warning(this, "Warning", "WARNING: The detection went wrong, the minimum Pulsewidth is too low, please switch on the remote and repeat the wizard.");
+                } else if (min_ppm_last_len <= 0.4) {
+                    msgBox2.warning(this, "Warning", "WARNING: The detection went wrong, the maximum Pulsewidth is too close to the center position.");
+                } else if (max_ppm_last_len >= 2.6) {
+                    msgBox2.warning(this, "Warning", "WARNING: The detection went wrong, the maximum Pulsewidth was too high, please switch on the remote and repeat the wizard.");
+                } else {
+                    msgBox2.warning(this, "Warning", "WARNING: The detection went wrong, please repeat it.");
+                }
+
             }
         }
     }
@@ -3388,6 +3424,8 @@ ppm_control_type MainWindow::getPPMType(){
     //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID;
     //} else if (ui->appconfPpmPidNorevButton->isChecked()) {
     //    appconf.app_ppm_conf.ctrl_type = PPM_CTRL_TYPE_PID_NOREV;
+    } else if (ui->appconfPpmWattButton->isChecked()) {
+        return PPM_CTRL_TYPE_WATT;
     } else if (ui->appconfPpmWattNorevBrakeButton->isChecked()) {
         return PPM_CTRL_TYPE_WATT_NOREV_BRAKE;
     //} else if (ui->appconfPpmPIDNoAccelerationButton->isChecked()) {
@@ -3395,4 +3433,5 @@ ppm_control_type MainWindow::getPPMType(){
     } else if (ui->appconfPpmCruiseControlSecondaryChannel->isChecked()) {
         return PPM_CTRL_TYPE_CRUISE_CONTROL_SECONDARY_CHANNEL;
     }
+    return PPM_CTRL_TYPE_NONE;
 }

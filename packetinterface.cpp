@@ -346,7 +346,7 @@ void PacketInterface::processPacket(const unsigned char *data, int len)
         values.current_in = utility::buffer_get_double32(data, 100.0, &ind);
         values.duty_now = utility::buffer_get_double16(data, 1000.0, &ind);
         values.rpm = utility::buffer_get_double32(data, 1.0, &ind);
-        values.v_in = utility::buffer_get_double16(data, 10.0, &ind);
+        values.v_in = utility::buffer_get_double16(data, 100.0, &ind);
         values.amp_hours = utility::buffer_get_double32(data, 10000.0, &ind);
         values.amp_hours_charged = utility::buffer_get_double32(data, 10000.0, &ind);
         values.watt_hours = utility::buffer_get_double32(data, 10000.0, &ind);
@@ -480,6 +480,9 @@ void PacketInterface::processPacket(const unsigned char *data, int len)
 
         // new config
         mcconf.s_pid_breaking_enabled = data[ind++];
+        mcconf.use_max_watt_limit = data[ind++];
+        mcconf.watts_max = utility::buffer_get_double16(data, 1.0, &ind);
+
         // new config end
 
         mcconf.meta_description = "Configuration loaded from the motor controller.";
@@ -552,32 +555,32 @@ void PacketInterface::processPacket(const unsigned char *data, int len)
 		
 		// new config
         appconf.app_ppm_conf.pulse_center = utility::buffer_get_double32(data, 1000.0, &ind);
-
         appconf.app_ppm_conf.tc_offset = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_ppm_conf.max_watt_enabled = data[ind++];
-        appconf.app_ppm_conf.max_watt = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_ppm_conf.max_watt_ramp_factor = utility::buffer_get_double32(data, 1000.0, &ind);
+        appconf.app_ppm_conf.cruise_left = (ppm_cruise)data[ind++];
+        appconf.app_ppm_conf.cruise_right = (ppm_cruise)data[ind++];
+        appconf.app_ppm_conf.max_erpm_for_dir_active = data[ind++];
+        appconf.app_ppm_conf.max_erpm_for_dir = utility::buffer_get_double32(data, 1000.0, &ind);
 
         appconf.app_chuk_conf.tc_offset = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_chuk_conf.max_watt_enabled = data[ind++];
-        appconf.app_chuk_conf.max_watt = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_chuk_conf.max_watt_ramp_factor = utility::buffer_get_double32(data, 1000.0, &ind);
+        appconf.app_chuk_conf.buttons_mirrored = data[ind++];
 
         appconf.app_throttle_conf.adjustable_throttle_enabled = data[ind++];
-        appconf.app_throttle_conf.y1_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.y2_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.y3_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.x1_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.x2_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.x3_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.bezier_reduce_factor = utility::buffer_get_double32(data, 100.0, &ind);
-        appconf.app_throttle_conf.y1_neg_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.y2_neg_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.y3_neg_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.x1_neg_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.x2_neg_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.x3_neg_throttle = utility::buffer_get_double32(data, 1000.0, &ind);
-        appconf.app_throttle_conf.bezier_neg_reduce_factor = utility::buffer_get_double32(data, 100.0, &ind);
+        appconf.app_throttle_conf.y1_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.y2_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.y3_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.x1_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.x2_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.x3_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.bezier_reduce_factor = utility::buffer_get_double16(data, 100.0, &ind);
+        appconf.app_throttle_conf.y1_neg_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.y2_neg_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.y3_neg_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.x1_neg_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.x2_neg_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.x3_neg_throttle = utility::buffer_get_double16(data, 1000.0, &ind);
+        appconf.app_throttle_conf.bezier_neg_reduce_factor = utility::buffer_get_double16(data, 100.0, &ind);
+        	
+        
 
 		// new config end
 		
@@ -1015,6 +1018,8 @@ bool PacketInterface::setMcconf(const mc_configuration &mcconf)
 
     // new config
     mSendBuffer[send_index++] = mcconf.s_pid_breaking_enabled;
+    mSendBuffer[send_index++] = mcconf.use_max_watt_limit;
+    utility::buffer_append_double16(mSendBuffer, mcconf.watts_max, 1, &send_index);
     // new config end
 
     return sendPacket(mSendBuffer, send_index);
@@ -1112,32 +1117,30 @@ bool PacketInterface::setAppConf(const app_configuration &appconf)
 
     //new config
     utility::buffer_append_double32(mSendBuffer, appconf.app_ppm_conf.pulse_center, 1000.0, &send_index);
-
     utility::buffer_append_double32(mSendBuffer, appconf.app_ppm_conf.tc_offset, 1000.0, &send_index);
-    mSendBuffer[send_index++] = appconf.app_ppm_conf.max_watt_enabled;
-    utility::buffer_append_double32(mSendBuffer, appconf.app_ppm_conf.max_watt, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_ppm_conf.max_watt_ramp_factor, 1000.0, &send_index);
-
+    mSendBuffer[send_index++] = appconf.app_ppm_conf.cruise_left;
+    mSendBuffer[send_index++] = appconf.app_ppm_conf.cruise_right;
+    mSendBuffer[send_index++] = appconf.app_ppm_conf.max_erpm_for_dir_active;
+    utility::buffer_append_double32(mSendBuffer, appconf.app_ppm_conf.max_erpm_for_dir, 1000.0, &send_index);
+    
     utility::buffer_append_double32(mSendBuffer, appconf.app_chuk_conf.tc_offset, 1000.0, &send_index);
-    mSendBuffer[send_index++] = appconf.app_chuk_conf.max_watt_enabled;
-    utility::buffer_append_double32(mSendBuffer, appconf.app_chuk_conf.max_watt, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_chuk_conf.max_watt_ramp_factor, 1000.0, &send_index);
-
+    mSendBuffer[send_index++] = appconf.app_chuk_conf.buttons_mirrored;
+    
     mSendBuffer[send_index++] = appconf.app_throttle_conf.adjustable_throttle_enabled;
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.y1_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.y2_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.y3_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.x1_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.x2_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.x3_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.bezier_reduce_factor, 100.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.y1_neg_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.y2_neg_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.y3_neg_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.x1_neg_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.x2_neg_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.x3_neg_throttle, 1000.0, &send_index);
-    utility::buffer_append_double32(mSendBuffer, appconf.app_throttle_conf.bezier_neg_reduce_factor, 100.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.y1_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.y2_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.y3_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.x1_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.x2_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.x3_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.bezier_reduce_factor, 100.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.y1_neg_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.y2_neg_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.y3_neg_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.x1_neg_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.x2_neg_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.x3_neg_throttle, 1000.0, &send_index);
+    utility::buffer_append_double16(mSendBuffer, appconf.app_throttle_conf.bezier_neg_reduce_factor, 100.0, &send_index);
     //new config end
 
     return sendPacket(mSendBuffer, send_index);

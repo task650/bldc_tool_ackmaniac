@@ -94,7 +94,8 @@ typedef enum {
     COMM_SET_SPEED_MODE,
     COMM_CHANGE_SPEED_MODE,
     COMM_GET_SPEED_MODE,
-    COMM_SET_CURRENT_CONF_AS_DEFAULT
+    COMM_SET_CURRENT_CONF_AS_DEFAULT,
+    COMM_SET_MOTOR_TYPE
 } COMM_PACKET_ID;
 
 typedef enum {
@@ -154,6 +155,8 @@ typedef struct {
     float l_in_current_max;
     float l_in_current_min;
     float l_abs_current_max;
+    bool use_max_watt_limit;
+	float watts_max;
     float l_min_erpm;
     float l_max_erpm;
     float l_max_erpm_fbrake;
@@ -257,8 +260,16 @@ typedef enum {
     PPM_CTRL_TYPE_PID_NOREV,
     PPM_CTRL_TYPE_WATT_NOREV_BRAKE,
     PPM_CTRL_TYPE_PID_NOACCELERATION,
-    PPM_CTRL_TYPE_CRUISE_CONTROL_SECONDARY_CHANNEL
+    PPM_CTRL_TYPE_CRUISE_CONTROL_SECONDARY_CHANNEL,
+    PPM_CTRL_TYPE_WATT
 } ppm_control_type;
+
+typedef enum {
+   CRUISE_CONTROL_MOTOR_SETTINGS = 0,
+   CRUISE_CONTROL_BRAKING_DISABLED,
+   CRUISE_CONTROL_BRAKING_ENABLED,
+   CRUISE_CONTROL_INACTIVE
+} ppm_cruise;
 
 typedef struct {
     ppm_control_type ctrl_type;
@@ -275,9 +286,10 @@ typedef struct {
     float tc_max_diff;
     float pulse_center;
     float tc_offset;
-    bool max_watt_enabled;
-    float max_watt;
-    float max_watt_ramp_factor;
+    ppm_cruise cruise_left;
+    ppm_cruise cruise_right;
+    bool max_erpm_for_dir_active;
+    float max_erpm_for_dir;
 } ppm_config;
 
 // ADC control types
@@ -318,7 +330,7 @@ typedef enum {
     CHUK_CTRL_TYPE_CURRENT,
     CHUK_CTRL_TYPE_CURRENT_NOREV,
     CHUK_CTRL_TYPE_WATT,
-	CHUK_CTRL_TYPE_WATT_NOREV
+    CHUK_CTRL_TYPE_WATT_NOREV
 } chuk_control_type;
 
 typedef struct {
@@ -333,9 +345,7 @@ typedef struct {
     bool tc;
     float tc_max_diff;
     float tc_offset;
-    bool max_watt_enabled;
-    float max_watt;
-    float max_watt_ramp_factor;
+    bool buttons_mirrored;
 } chuk_config;
 
 // NRF Datatypes
